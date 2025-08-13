@@ -1,528 +1,39 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Inventario</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-        .view { transition: opacity 0.3s ease-in-out; }
-        details > summary { list-style: none; }
-        details > summary::-webkit-details-marker { display: none; }
-        .sticky-header { position: sticky; top: 0; background-color: #374151; }
-        .sticky-footer { position: sticky; bottom: 0; background-color: #1f2937; }
-        .drag-handle { cursor: grab; }
-        .dragging { opacity: 0.5; background: #4f46e5; }
-        .drag-over { border-top: 2px solid #a5b4fc; }
-    </style>
-</head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+import {
+  auth,
+  db,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  onSnapshot,
+  writeBatch,
+  query,
+  orderBy,
+  deleteDoc,
+  getRefs
+} from './firebase.js';
+import { state, runtime } from './state.js';
+import { initialItemsList } from './items.js';
+import { getDOM } from './elements.js';
 
-    <div id="app-container" class="w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl p-6 flex flex-col h-[90vh] relative">
-        
-        <div id="loading-view" class="view absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-            <h1 class="text-2xl font-bold text-white">Conectando...</h1>
-        </div>
-
-        <div id="login-view" class="view hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-            <h1 id="auth-title" class="text-4xl font-bold text-white mb-4">Iniciar Sesión</h1>
-            <p class="text-gray-400 mb-8">Ingresa a tu cuenta para ver tu inventario.</p>
-            
-            <div class="w-full space-y-4">
-                <input type="email" id="email-input" placeholder="Correo electrónico" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600 focus:border-indigo-500">
-                <input type="password" id="password-input" placeholder="Contraseña" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600 focus:border-indigo-500">
-            </div>
-            
-            <button id="auth-action-btn" class="mt-8 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Iniciar Sesión</button>
-
-            <p class="text-sm text-gray-400 mt-4">
-                <span id="auth-toggle-text">¿No tienes cuenta?</span>
-                <button id="auth-toggle-btn" class="font-semibold text-indigo-400 hover:text-indigo-300">Regístrate</button>
-            </p>
-
-            <div id="login-error-message" class="mt-4 text-red-400 text-sm"></div>
-        </div>
-
-        <div id="main-content" class="hidden flex-grow overflow-hidden relative">
-            <div id="main-menu-view" class="view absolute inset-0 flex flex-col text-center">
-                <div class="p-4 bg-gray-900 rounded-t-xl">
-                    <p class="text-xs text-gray-400">Sesión iniciada como:</p>
-                    <p id="user-email" class="text-sm font-semibold truncate"></p>
-                </div>
-                <div class="flex-grow flex flex-col items-center justify-center">
-                    <h1 class="text-4xl font-bold text-white mb-8">Inventario KFC</h1>
-                    <div class="w-full space-y-3 px-4">
-                        <button id="continue-inventory-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Continuar Inventario</button>
-                        <button id="continue-order-btn" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg">Continuar Pedido</button>
-                        <button id="start-new-inventory-btn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg">Nuevo Inventario</button>
-                        <button id="make-order-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">Hacer Pedido</button>
-                        <button id="consumption-report-btn" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 px-4 rounded-lg">Reporte de Consumo</button>
-                        <button id="history-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg">Ver Historial</button>
-                        <button id="manage-items-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg">Gestionar Ítems</button>
-                    </div>
-                </div>
-                <div class="p-4">
-                    <button id="logout-btn" class="text-sm text-red-400 hover:text-red-300">Cerrar Sesión</button>
-                </div>
-            </div>
-            
-            <div id="consumption-setup-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-menu-from-consumption-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-xl font-bold text-center text-gray-100">Reporte de Consumo</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div class="w-full space-y-4">
-                    <div>
-                        <label for="start-inventory-select" class="block text-sm font-medium text-gray-300 mb-1">Inventario Inicial</label>
-                        <select id="start-inventory-select" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600"></select>
-                    </div>
-                    <div>
-                        <label for="end-inventory-select" class="block text-sm font-medium text-gray-300 mb-1">Inventario Final</label>
-                        <select id="end-inventory-select" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600"></select>
-                    </div>
-                </div>
-                <button id="generate-consumption-report-btn" class="mt-8 w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 px-4 rounded-lg">Generar Reporte</button>
-            </div>
-
-            <div id="consumption-result-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-consumption-setup-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-xl font-bold text-center text-gray-100">Resultado del Reporte</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div id="consumption-result-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
-            </div>
-
-            <div id="select-inventory-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                 <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-menu-from-select-inv-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-2xl font-bold text-center text-gray-100">Base para Pedido</h1>
-                    <div class="w-8"></div>
-                </div>
-                <p class="text-center text-gray-400 mb-4">Selecciona un inventario como base.</p>
-                <div id="select-inventory-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-            </div>
-
-            <div id="setup-order-view" class="view hidden absolute inset-0 flex flex-col h-full items-center justify-center text-center">
-                <h1 class="text-3xl font-bold mb-8">Fecha del Pedido</h1>
-                <p class="text-gray-400 mb-4">¿Para qué día es este pedido?</p>
-                <div class="w-full space-y-4">
-                    <input type="date" id="order-for-date" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600">
-                </div>
-                <div class="flex gap-2 mt-8 w-full">
-                    <button id="back-to-select-inv-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg">Atrás</button>
-                    <button id="start-ordering-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">Siguiente</button>
-                </div>
-            </div>
-
-            <div id="order-method-view" class="view hidden absolute inset-0 flex flex-col h-full items-center justify-center text-center">
-                <h1 class="text-3xl font-bold mb-8">¿Cómo quieres hacer el pedido?</h1>
-                <div class="w-full space-y-4">
-                     <button id="order-method-manual-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Ingresar Manualmente</button>
-                     <button id="order-method-remito-btn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-4 rounded-lg">Cargar desde Remito</button>
-                </div>
-                 <button id="back-to-setup-order-btn" class="mt-8 w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg">Atrás</button>
-            </div>
-            
-            <div id="remito-upload-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-order-method-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-xl font-bold text-center text-gray-100">Cargar Remito</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div class="flex-grow flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-gray-600 rounded-lg bg-gray-900/50">
-                    <label for="remito-upload-creation" class="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                        <p class="text-gray-400">Selecciona fotos o un PDF del remito</p>
-                        <input type="file" id="remito-upload-creation" accept="image/*,application/pdf" class="hidden" multiple>
-                        <div id="remito-preview-container" class="mt-4 flex flex-wrap gap-2 justify-center max-h-48 overflow-y-auto"></div>
-                    </label>
-                </div>
-                <button id="analyze-creation-remito-btn" class="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>Analizar Remito</button>
-                <div id="processing-creation-loader" class="hidden text-center mt-2 text-sm text-blue-400">Procesando archivos...</div>
-            </div>
-
-            <div id="remito-confirm-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                   <button id="back-to-remito-upload-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                   <h1 class="text-xl font-bold text-center text-gray-100">Confirmar Cantidades</h1>
-                   <div class="w-8"></div>
-                </div>
-                <p class="text-sm text-gray-400 mb-4 text-center">Ajusta, agrega o elimina ítems del remito.</p>
-                
-                <div class="mb-4 p-3 bg-gray-900/50 rounded-lg space-y-2">
-                    <h3 class="text-md font-semibold mb-2 text-gray-300">Agregar Ítem Manualmente</h3>
-                    <select id="add-remito-item-select" class="w-full bg-gray-700 text-white p-2 rounded-lg border-2 border-gray-600"></select>
-                    <div class="flex gap-2">
-                        <input type="number" id="add-remito-item-quantity" placeholder="Cantidad" class="flex-grow bg-gray-700 text-white p-2 rounded-lg border-2 border-gray-600">
-                        <button id="add-remito-item-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold px-5 rounded-lg">Agregar</button>
-                    </div>
-                </div>
-
-                <div id="remito-confirm-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-                
-                <div id="remito-summary-footer" class="sticky-footer p-4 mt-4 border-t border-gray-600 rounded-b-lg">
-                    <div class="flex justify-between items-center text-lg">
-                        <p class="text-gray-300">Ítems: <span id="remito-item-count" class="font-bold text-white">0</span></p>
-                        <p class="text-gray-300">Bultos Totales: <span id="remito-bulto-count" class="font-bold text-white">0</span></p>
-                    </div>
-                     <button id="confirm-remito-data-btn" class="mt-4 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg">Confirmar y Crear Pedido</button>
-                </div>
-            </div>
-
-            <div id="order-item-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex-grow flex flex-col items-center justify-center text-center">
-                    <p id="order-item-counter" class="text-sm font-medium text-blue-400 mb-2">Ítem 1/123</p>
-                    <h1 id="order-item-name" class="text-3xl font-bold mb-4 text-gray-100">Nombre del Ítem</h1>
-                    <div class="flex items-center justify-center gap-4 w-full mb-6">
-                        <div class="text-center">
-                            <label class="block text-sm font-medium text-gray-400">Stock Actual</label>
-                            <div id="order-item-stock" class="bg-gray-700 text-white text-2xl p-4 rounded-lg w-32">0</div>
-                        </div>
-                        <div class="text-center">
-                            <label class="block text-sm font-medium text-gray-400">Cantidad a Pedir</label>
-                            <input type="number" step="0.01" id="order-item-quantity" placeholder="Pedir" class="bg-gray-600 text-white text-center text-2xl p-4 rounded-lg border-2 border-gray-500 w-32">
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-auto grid grid-cols-3 gap-2">
-                    <button id="order-no-pedir-btn" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-2 rounded-lg text-sm">No Pedir</button>
-                    <button id="order-skip-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-2 rounded-lg text-sm">Saltar</button>
-                    <button id="order-next-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-2 rounded-lg text-sm">Siguiente</button>
-                </div>
-            </div>
-
-            <div id="order-summary-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-order-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 id="order-summary-title" class="text-xl font-bold text-center text-gray-100">Resumen de Pedido</h1>
-                    <div class="w-8"></div>
-                </div>
-                 <input type="search" id="order-summary-search" placeholder="Buscar ítem..." class="w-full bg-gray-700 p-2 rounded-lg mb-4 border-2 border-gray-600">
-                <div id="order-summary-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-            </div>
-
-            <div id="edit-order-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-history-from-edit-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 id="edit-order-title" class="text-xl font-bold text-center text-gray-100">Editar Pedido</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div id="edit-order-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-                <button id="save-edited-order-btn" class="mt-4 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg">Guardar Cambios</button>
-            </div>
-
-            <div id="edit-inventory-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-history-from-edit-inv-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 id="edit-inventory-title" class="text-xl font-bold text-center text-gray-100">Editar Inventario</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div id="edit-inventory-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-                <button id="save-edited-inventory-btn" class="mt-4 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg">Guardar Cambios</button>
-            </div>
-
-            <div id="setup-view" class="view hidden absolute inset-0 flex flex-col h-full items-center justify-center text-center">
-                <h1 class="text-3xl font-bold mb-8">Detalles del Conteo</h1>
-                <div class="w-full space-y-4">
-                    <input type="date" id="inventory-date" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600">
-                    <select id="inventory-time" class="w-full bg-gray-700 text-white p-3 rounded-lg border-2 border-gray-600">
-                        <option>Apertura</option> <option>Intermedio</option> <option>Cierre</option>
-                    </select>
-                </div>
-                <button id="start-counting-btn" class="mt-8 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Comenzar</button>
-            </div>
-
-            <div id="item-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex-grow flex flex-col items-center justify-center text-center">
-                    <p id="item-counter" class="text-sm font-medium text-indigo-400 mb-2">Ítem 1/123</p>
-                    <h1 id="item-name" class="text-3xl font-bold mb-6 text-gray-100">Nombre del Ítem</h1>
-                    <input type="number" step="0.01" id="item-quantity" placeholder="Ingresa la cantidad" class="w-full bg-gray-700 text-white text-center text-2xl p-4 rounded-lg border-2 border-gray-600">
-                </div>
-                <div class="mt-auto grid grid-cols-3 gap-2">
-                    <button id="na-btn" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-2 rounded-lg text-sm">N/A</button>
-                    <button id="skip-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-2 rounded-lg text-sm">Saltar</button>
-                    <button id="next-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-2 rounded-lg text-sm">Siguiente</button>
-                </div>
-            </div>
-
-            <div id="summary-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-count-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-2xl font-bold text-center text-gray-100">Resumen</h1>
-                    <div class="w-8"></div>
-                </div>
-                <input type="search" id="inventory-summary-search" placeholder="Buscar ítem..." class="w-full bg-gray-700 p-2 rounded-lg mb-4 border-2 border-gray-600">
-                <div id="summary-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-            </div>
-
-            <div id="history-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                 <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-menu-from-history-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-2xl font-bold text-center text-gray-100">Historial</h1>
-                    <div class="w-8"></div>
-                </div>
-                <div id="history-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-            </div>
-
-            <div id="history-detail-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                 <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-history-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 id="history-detail-title" class="text-xl font-bold text-center text-gray-100">Detalle</h1>
-                    <button id="history-detail-pdf-btn" class="bg-indigo-600 px-3 py-1 rounded-lg text-sm">PDF</button>
-                </div>
-                <div id="history-detail-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
-            </div>
-
-            <div id="manage-items-view" class="view hidden absolute inset-0 flex flex-col h-full">
-                 <div class="flex items-center justify-between mb-4">
-                    <button id="back-to-menu-from-manage-btn" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">&larr;</button>
-                    <h1 class="text-2xl font-bold text-center text-gray-100">Gestionar Ítems</h1>
-                    <div class="w-8"></div>
-                </div>
-                 <input type="search" id="manage-items-search" placeholder="Buscar ítem..." class="w-full bg-gray-700 p-2 rounded-lg mb-4 border-2 border-gray-600">
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-item-name" placeholder="Nombre del nuevo ítem" class="flex-grow bg-gray-700 p-2 rounded-lg border-2 border-gray-600">
-                    <button id="add-item-btn" class="bg-green-600 px-4 rounded-lg font-bold">+</button>
-                </div>
-                <div id="manage-items-list" class="flex-grow overflow-y-auto pr-2 space-y-3"></div>
-                <button id="save-item-order-btn" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Guardar Orden</button>
-            </div>
-
-            <div id="finished-view" class="view hidden absolute inset-0 flex-col h-full items-center justify-center text-center">
-                 <h1 class="text-3xl font-bold mb-4 text-green-400">¡Inventario Completo!</h1>
-                 <p class="text-gray-300 mb-6">Conteo finalizado. Puedes guardarlo o descargarlo.</p>
-                 <div class="w-full space-y-4">
-                    <button id="save-and-finish-btn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg">Guardar y Finalizar</button>
-                    <button id="final-download-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Descargar PDF</button>
-                 </div>
-            </div>
-
-            <div id="order-finished-view" class="view hidden absolute inset-0 flex-col h-full items-center justify-center text-center">
-                 <h1 class="text-3xl font-bold mb-4 text-blue-400">¡Pedido Completo!</h1>
-                 <p class="text-gray-300 mb-6">Has ingresado todos los ítems del pedido.</p>
-                 <div class="w-full space-y-4">
-                    <button id="save-order-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">Guardar Pedido</button>
-                    <button id="order-finished-download-pdf-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg">Descargar PDF</button>
-                 </div>
-            </div>
-        </div>
-        
-        <div id="nav-buttons" class="mt-6 flex justify-center space-x-2" style="display: none;">
-            <button id="discard-progress-btn" class="bg-red-800 hover:bg-red-700 text-sm text-white font-bold py-2 px-4 rounded-lg">Descartar</button>
-            <button data-context="inventory" id="summary-btn" class="bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 font-medium py-2 px-4 rounded-lg">Resumen</button>
-            <button data-context="inventory" id="download-pdf-btn" class="bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 font-medium py-2 px-4 rounded-lg">PDF</button>
-            <button id="save-and-exit-btn" class="bg-indigo-800 hover:bg-indigo-700 text-sm text-white font-bold py-2 px-4 rounded-lg">Guardar y Salir</button>
-        </div>
-    </div>
-    
-    <div id="toast-notification" class="hidden fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg z-50"></div>
-
-    <div id="confirm-delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-        <div class="bg-gray-800 rounded-lg p-6 text-center shadow-xl">
-            <h3 id="confirm-delete-title" class="text-lg font-bold text-white mb-2">¿Estás seguro?</h3>
-            <p id="confirm-delete-message" class="text-gray-300 mb-6">Esta acción no se puede deshacer.</p>
-            <div class="flex justify-center space-x-4">
-                <button id="cancel-delete-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Cancelar</button>
-                <button id="confirm-delete-btn" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded-lg">Confirmar</button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot, writeBatch, query, orderBy, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyB7MrPbY7cwywvOnyz_-5RXFO1S40Z6Ous",
-            authDomain: "mi-app-inventario-e639f.firebaseapp.com",
-            projectId: "mi-app-inventario-e639f",
-            storageBucket: "mi-app-inventario-e639f.appspot.com",
-            messagingSenderId: "97971834944",
-            appId: "1:97971834944:web:604dbbc1cf96964fcd4fa5"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        const initialItemsList = ["ACEITE FRITURA", "ALMIBAR PARA FACTURA X 7 KG", "AZUCAR INDIVIDUAL KFC", "BANDEJA CANOA KFC", "BOLSA DE LLEVAR GRANDE KFC2", "BOLSA DE RESIDUOS CHICA", "BOLSA DE RESIDUOS NEGRA X 250 UND", "BOLSA DE RESIDUOS TRANSPARENTE", "BOLSA PARA MARINADO K EN ROLLOS", "BOLSA SIN MANIJA GRANDE KFC X 250 UND", "BUCKET 130OZ KFC X 300UN", "BUCKET 50OZ X 420 UND", "BUCKET 85OZ X 330 UND", "CAFE EN POLVO", "CAJA BIG BOXKFC", "CAJA SNACK CON TAPA KFC X 800 UND", "CANDADITOS KFC", "CHOCOLATE CON MANI X 4.32KG", "CHOCOLATE EN POLVO X 4KG", "CINTA DE SEGURIDAD KFC X 36 UND", "COFIA DE FISELINA DESCARTABLE", "CONO HELADO", "CUCHARITA PARA HELADO X 1000 UND", "CUCHILLO", "EDULCORANTE INDIVIDUAL KFC", "ESTUCHE PAPA CHICA KFC X 800 UND", "ESTUCHE PAPAS GRANDES KFC", "ESTUCHE PAPAS MEDIANAS KFC", "ESTUCHE POPCORN GRANDE", "ESTUCHE POPCORN MEDIANO", "ETC TEMPERO", "FILTRO FREIDORAS FRYMASTER", "FILTRO FREIDORAS HENNY PENNY", "GALLETITA OREO CAJA X36 X 117 GR", "GUANTES VINILO M", "HARINA X 11.389KG", "JUGO DE LIMON INDIVIDUAL", "KETCHUP INDIVIDUAL", "LAMINA ANTIGRASA SANDWICH KFC X1500", "LECHE EN POLVO CAJAX10KG", "MANTECOL", "MANTELITO KFC", "MAYONESA INDIVIDUAL", "MEZCLA HUEVO/LECHE", "MOSTAZA CON MIEL", "MOSTAZA CON MIEL INDIVIDUAL", "MOSTAZA INDIVIDUAL", "PAÑO BLANCO X 300 UN", "PAÑO AZUL", "PAÑO ROJO", "PAPEL ANTIGRASA BLANCO", "PAPEL ANTIGRASA GENERICO CAJA X 4000", "PAPEL ANTIGRASA SANDWICH KFC 2", "PAPEL DE MANOS (TO)", "PAPEL FILM (ROLLO)", "PAPEL HIGIENICO", "PAPEL SILICONADO X 500 UND", "PORTAVASOS KFC X 200 UND", "REVOLVEDOR CAFE MADERA", "ROLLO IMPRESORA FISCAL GENERICO 2", "SAL A GRANEL", "SAL SOBRE INDIVIDUAL KFC", "SALSA BARBACOA A GRANEL", "SALSA BARBACOA INDIVIDUAL", "SALSA PICANTE A GRANEL", "SALSA PICANTE INDIVIDUAL", "SEASONING OR", "SERVILLETAS 30X30 X 5000 UND", "SERVILletas PARA CONO", "SOBRE KFC X 1000 UND", "STICKER REDONDO AMARILLO", "STICKER REDONDO AZUL", "STICKER REDONDO NARANJA", "STICKER REDONDO NEGRO", "STICKER REDONDO ROJO", "STICKER REDONDO VERDE", "STICKER VENCIMIENTO", "SUNDAE KFC 7.25 OZ X 2000 UND", "TAPA BUCKET KFC X 2150 UND", "TAPA CAJA BIG BOX", "TAPA DIPPER", "TAPA VASO CAFE 8 Y 12 OZ X 2000 UND", "TAPA VASO GASEOSA 16OZ", "TAPA VASO GASEOSA 12OZ", "TE INTIZEN ILUMINE (ROJO)", "TENEDOR", "QUESO CHEDDAR EN POLVO", "VASO AVALANCHA KFC X 1200 UND", "VASO CAFE 8 OZ KFC", "VASO CORTESIA KFC", "VASO GASEOSA 12OZ KFC A", "VASO GASEOSA 16OZ KFC A", "VASO GASEOSA 21OZ KFC", "VASO CAFE 12 OZ KFC X 1000", "HELADO DULCE DE LECHE", "HELADO VAINILLA", "JARABE DE FRUTILLA", "SALSA DE CHOCOLATE", "SALSA DE DULCE DE LECHE X 5KG", "QUESO CHEDDAR EN FETAS 2", "LOMITO EN FETAS", "PANCETA KFC", "MANTECA X 6KG", "MAYONESA A GRANEL", "MIXDE ENSALADA", "TOMATE", "PAN PORTENO", "PANAL MEMBRILLO X 72 UND", "REJILLA PASTELERA X 72 UND", "MEDIALUNA DE GRASA X 240 UND", "MEDIALUNA DE MANTECA X 180 UND", "HELADO CONG SUNDAE CHOC", "HELADO CONGELADO SUNDAE DDL", "HELADO CONGELADO AVALANCHA KFC", "PAPAS FRITAS KFC C7 X 18 KG", "AROS DE CEBOLLA X 10KG"];
-        
-        let state = {
-            currentInventory: null,
-            currentOrder: null,
-            history: [],
-            masterItems: []
-        };
-        let itemsToCountQueue = [];
-        let positionInQueue = -1;
-        let currentIndex = 0;
-        let appMode = 'inventory';
-        let tempBaseInventoryId = null;
-        let editingId = null;
-        let userId = null;
-        let unsubscribe = {};
-        let isLoginMode = true;
-        let tempRemitoItems = [];
-        let draggedItemIndex = null;
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const allViews = document.querySelectorAll('.view');
-            const navButtons = document.getElementById('nav-buttons');
-            const el = {
-                loadingView: document.getElementById('loading-view'),
-                loginView: document.getElementById('login-view'),
-                mainContent: document.getElementById('main-content'),
-                mainMenu: document.getElementById('main-menu-view'),
-                setup: document.getElementById('setup-view'),
-                item: document.getElementById('item-view'),
-                summary: document.getElementById('summary-view'),
-                history: document.getElementById('history-view'),
-                historyDetail: document.getElementById('history-detail-view'),
-                manageItems: document.getElementById('manage-items-view'),
-                finished: document.getElementById('finished-view'),
-                orderFinished: document.getElementById('order-finished-view'),
-                selectInventory: document.getElementById('select-inventory-view'),
-                setupOrder: document.getElementById('setup-order-view'),
-                orderItem: document.getElementById('order-item-view'),
-                orderSummary: document.getElementById('order-summary-view'),
-                editOrder: document.getElementById('edit-order-view'),
-                editInventory: document.getElementById('edit-inventory-view'),
-                consumptionSetup: document.getElementById('consumption-setup-view'),
-                consumptionResult: document.getElementById('consumption-result-view'),
-                continueInventoryBtn: document.getElementById('continue-inventory-btn'),
-                continueOrderBtn: document.getElementById('continue-order-btn'),
-                startNewInventoryBtn: document.getElementById('start-new-inventory-btn'),
-                makeOrderBtn: document.getElementById('make-order-btn'),
-                consumptionReportBtn: document.getElementById('consumption-report-btn'),
-                historyBtn: document.getElementById('history-btn'),
-                manageItemsBtn: document.getElementById('manage-items-btn'),
-                inventoryDate: document.getElementById('inventory-date'),
-                inventoryTime: document.getElementById('inventory-time'),
-                startCountingBtn: document.getElementById('start-counting-btn'),
-                itemCounter: document.getElementById('item-counter'),
-                itemName: document.getElementById('item-name'),
-                itemQuantity: document.getElementById('item-quantity'),
-                naBtn: document.getElementById('na-btn'),
-                skipBtn: document.getElementById('skip-btn'),
-                nextBtn: document.getElementById('next-btn'),
-                summaryList: document.getElementById('summary-list'),
-                inventorySummarySearch: document.getElementById('inventory-summary-search'),
-                backToCountBtn: document.getElementById('back-to-count-btn'),
-                historyList: document.getElementById('history-list'),
-                backToMenuFromHistoryBtn: document.getElementById('back-to-menu-from-history-btn'),
-                historyDetailTitle: document.getElementById('history-detail-title'),
-                historyDetailList: document.getElementById('history-detail-list'),
-                historyDetailPdfBtn: document.getElementById('history-detail-pdf-btn'),
-                backToHistoryBtn: document.getElementById('back-to-history-btn'),
-                manageItemsList: document.getElementById('manage-items-list'),
-                manageItemsSearch: document.getElementById('manage-items-search'),
-                newItemName: document.getElementById('new-item-name'),
-                addItemBtn: document.getElementById('add-item-btn'),
-                backToMenuFromManageBtn: document.getElementById('back-to-menu-from-manage-btn'),
-                saveAndFinishBtn: document.getElementById('save-and-finish-btn'),
-                finalDownloadBtn: document.getElementById('final-download-btn'),
-                saveOrderBtn: document.getElementById('save-order-btn'),
-                orderFinishedDownloadPdfBtn: document.getElementById('order-finished-download-pdf-btn'),
-                globalSummaryBtn: document.getElementById('summary-btn'),
-                globalPdfBtn: document.getElementById('download-pdf-btn'),
-                saveAndExitBtn: document.getElementById('save-and-exit-btn'),
-                discardProgressBtn: document.getElementById('discard-progress-btn'),
-                saveItemOrderBtn: document.getElementById('save-item-order-btn'),
-                toast: document.getElementById('toast-notification'),
-                confirmDeleteModal: document.getElementById('confirm-delete-modal'),
-                confirmDeleteTitle: document.getElementById('confirm-delete-title'),
-                confirmDeleteMessage: document.getElementById('confirm-delete-message'),
-                cancelDeleteBtn: document.getElementById('cancel-delete-btn'),
-                confirmDeleteBtn: document.getElementById('confirm-delete-btn'),
-                selectInventoryList: document.getElementById('select-inventory-list'),
-                backToMenuFromSelectInvBtn: document.getElementById('back-to-menu-from-select-inv-btn'),
-                orderForDate: document.getElementById('order-for-date'),
-                backToSelectInvBtn: document.getElementById('back-to-select-inv-btn'),
-                startOrderingBtn: document.getElementById('start-ordering-btn'),
-                orderItemCounter: document.getElementById('order-item-counter'),
-                orderItemName: document.getElementById('order-item-name'),
-                orderItemStock: document.getElementById('order-item-stock'),
-                orderItemQuantity: document.getElementById('order-item-quantity'),
-                orderNoPedirBtn: document.getElementById('order-no-pedir-btn'),
-                orderSkipBtn: document.getElementById('order-skip-btn'),
-                orderNextBtn: document.getElementById('order-next-btn'),
-                orderSummaryTitle: document.getElementById('order-summary-title'),
-                orderSummaryList: document.getElementById('order-summary-list'),
-                orderSummarySearch: document.getElementById('order-summary-search'),
-                backToOrderBtn: document.getElementById('back-to-order-btn'),
-                editOrderTitle: document.getElementById('edit-order-title'),
-                editOrderList: document.getElementById('edit-order-list'),
-                backToHistoryFromEditBtn: document.getElementById('back-to-history-from-edit-btn'),
-                saveEditedOrderBtn: document.getElementById('save-edited-order-btn'),
-                editInventoryTitle: document.getElementById('edit-inventory-title'),
-                editInventoryList: document.getElementById('edit-inventory-list'),
-                backToHistoryFromEditInvBtn: document.getElementById('back-to-history-from-edit-inv-btn'),
-                saveEditedInventoryBtn: document.getElementById('save-edited-inventory-btn'),
-                backToMenuFromConsumptionBtn: document.getElementById('back-to-menu-from-consumption-btn'),
-                startInventorySelect: document.getElementById('start-inventory-select'),
-                endInventorySelect: document.getElementById('end-inventory-select'),
-                generateConsumptionReportBtn: document.getElementById('generate-consumption-report-btn'),
-                consumptionResultList: document.getElementById('consumption-result-list'),
-                backToConsumptionSetupBtn: document.getElementById('back-to-consumption-setup-btn'),
-                logoutBtn: document.getElementById('logout-btn'),
-                userEmail: document.getElementById('user-email'),
-                loginError: document.getElementById('login-error-message'),
-                authTitle: document.getElementById('auth-title'),
-                emailInput: document.getElementById('email-input'),
-                passwordInput: document.getElementById('password-input'),
-                authActionBtn: document.getElementById('auth-action-btn'),
-                authToggleText: document.getElementById('auth-toggle-text'),
-                authToggleBtn: document.getElementById('auth-toggle-btn'),
-                orderMethodView: document.getElementById('order-method-view'),
-                orderMethodManualBtn: document.getElementById('order-method-manual-btn'),
-                orderMethodRemitoBtn: document.getElementById('order-method-remito-btn'),
-                backToSetupOrderBtn: document.getElementById('back-to-setup-order-btn'),
-                remitoUploadView: document.getElementById('remito-upload-view'),
-                backToOrderMethodBtn: document.getElementById('back-to-order-method-btn'),
-                remitoUploadCreation: document.getElementById('remito-upload-creation'),
-                remitoPreviewContainer: document.getElementById('remito-preview-container'),
-                analyzeCreationRemitoBtn: document.getElementById('analyze-creation-remito-btn'),
-                processingCreationLoader: document.getElementById('processing-creation-loader'),
-                remitoConfirmView: document.getElementById('remito-confirm-view'),
-                backToRemitoUploadBtn: document.getElementById('back-to-remito-upload-btn'),
-                remitoConfirmList: document.getElementById('remito-confirm-list'),
-                confirmRemitoDataBtn: document.getElementById('confirm-remito-data-btn'),
-                addRemitoItemSelect: document.getElementById('add-remito-item-select'),
-                addRemitoItemQuantity: document.getElementById('add-remito-item-quantity'),
-                addRemitoItemBtn: document.getElementById('add-remito-item-btn'),
-                remitoItemCount: document.getElementById('remito-item-count'),
-                remitoBultoCount: document.getElementById('remito-bulto-count'),
-            };
-
-            const refs = {
-                masterItems: () => doc(db, 'users', userId, 'data', 'masterItems'),
-                currentInventory: () => doc(db, 'users', userId, 'data', 'currentInventory'),
-                currentOrder: () => doc(db, 'users', userId, 'data', 'currentOrder'),
-                history: () => collection(db, 'users', userId, 'history'),
-                historyDoc: (id) => doc(db, 'users', userId, 'history', String(id))
-            };
-
+document.addEventListener('DOMContentLoaded', () => {
+    const { allViews, navButtons, el } = getDOM();
+    let refs = {};
             onAuthStateChanged(auth, user => {
                 if (user) {
-                    userId = user.uid;
+                    runtime.userId = user.uid;
+                    refs = getRefs(runtime.userId);
                     el.userEmail.textContent = user.email || 'Usuario Anónimo';
-                    Object.values(unsubscribe).forEach(unsub => unsub());
+                    Object.values(runtime.unsubscribe).forEach(unsub => unsub());
                     
-                    unsubscribe.masterItems = onSnapshot(refs.masterItems(), (docSnap) => {
+                    runtime.unsubscribe.masterItems = onSnapshot(refs.masterItems(), (docSnap) => {
                         if (docSnap.exists() && docSnap.data().items) {
                             state.masterItems = docSnap.data().items;
                         } else {
@@ -531,18 +42,18 @@
                         }
                     });
 
-                    unsubscribe.currentInventory = onSnapshot(refs.currentInventory(), (docSnap) => {
+                    runtime.unsubscribe.currentInventory = onSnapshot(refs.currentInventory(), (docSnap) => {
                         state.currentInventory = docSnap.exists() ? docSnap.data() : null;
                         el.continueInventoryBtn.style.display = state.currentInventory ? 'block' : 'none';
                     });
 
-                    unsubscribe.currentOrder = onSnapshot(refs.currentOrder(), (docSnap) => {
+                    runtime.unsubscribe.currentOrder = onSnapshot(refs.currentOrder(), (docSnap) => {
                         state.currentOrder = docSnap.exists() ? docSnap.data() : null;
                         el.continueOrderBtn.style.display = state.currentOrder ? 'block' : 'none';
                     });
 
                     const q = query(refs.history(), orderBy('date', 'desc'));
-                    unsubscribe.history = onSnapshot(q, (querySnapshot) => {
+                    runtime.unsubscribe.history = onSnapshot(q, (querySnapshot) => {
                         state.history = [];
                         querySnapshot.forEach((doc) => {
                             state.history.push({ ...doc.data(), id: doc.id });
@@ -555,8 +66,8 @@
                     switchView(el.mainMenu);
 
                 } else {
-                    userId = null;
-                    Object.values(unsubscribe).forEach(unsub => unsub());
+                    runtime.userId = null;
+                    Object.values(runtime.unsubscribe).forEach(unsub => unsub());
                     el.loadingView.classList.add('hidden');
                     el.mainContent.classList.add('hidden');
                     el.loginView.classList.remove('hidden');
@@ -567,15 +78,15 @@
                 allViews.forEach(v => v.classList.add('hidden'));
                 viewToShow.classList.remove('hidden');
                 let showNav = false;
-                if (appMode === 'inventory' && ([el.item, el.summary].includes(viewToShow))) {
+                if (runtime.appMode === 'inventory' && ([el.item, el.summary].includes(viewToShow))) {
                     showNav = true;
-                } else if (appMode === 'order' && ([el.orderItem, el.orderSummary].includes(viewToShow))) {
+                } else if (runtime.appMode === 'order' && ([el.orderItem, el.orderSummary].includes(viewToShow))) {
                     showNav = true;
                 }
                 navButtons.style.display = showNav ? 'flex' : 'none';
                 if(showNav){
-                    el.globalSummaryBtn.dataset.context = appMode;
-                    el.globalPdfBtn.dataset.context = appMode;
+                    el.globalSummaryBtn.dataset.context = runtime.appMode;
+                    el.globalPdfBtn.dataset.context = runtime.appMode;
                 }
             }
 
@@ -587,38 +98,38 @@
 
             function renderCurrentItem(mode) {
                 const process = mode === 'order' ? state.currentOrder : state.currentInventory;
-                if (currentIndex < 0 || !process || currentIndex >= process.items.length) return;
-                const item = process.items[currentIndex];
+                if (runtime.currentIndex < 0 || !process || runtime.currentIndex >= process.items.length) return;
+                const item = process.items[runtime.currentIndex];
                 
                 if (mode === 'order') {
                     el.orderItemName.textContent = item.name;
-                    el.orderItemCounter.textContent = `Ítem ${positionInQueue + 1} de ${itemsToCountQueue.length}`;
+                    el.orderItemCounter.textContent = `Ítem ${runtime.positionInQueue + 1} de ${runtime.itemsToCountQueue.length}`;
                     el.orderItemStock.textContent = item.stock ?? 'N/A';
                     el.orderItemQuantity.value = (item.toOrder === null || item.toOrder === 'NO PEDIR') ? '' : item.toOrder;
                     el.orderItemQuantity.focus();
                 } else {
                     el.itemName.textContent = item.name;
-                    el.itemCounter.textContent = `Ítem ${positionInQueue + 1} de ${itemsToCountQueue.length}`;
+                    el.itemCounter.textContent = `Ítem ${runtime.positionInQueue + 1} de ${runtime.itemsToCountQueue.length}`;
                     el.itemQuantity.value = (item.quantity === null || item.quantity === 'N/A') ? '' : item.quantity;
                     el.itemQuantity.focus();
                 }
             }
 
             async function advanceToNextItem(mode) {
-                positionInQueue++;
+                runtime.positionInQueue++;
                 const process = mode === 'order' ? state.currentOrder : state.currentInventory;
                 const quantityKey = mode === 'order' ? 'toOrder' : 'quantity';
 
-                if (positionInQueue >= itemsToCountQueue.length) {
+                if (runtime.positionInQueue >= runtime.itemsToCountQueue.length) {
                     const remainingIndices = process.items
                         .map((item, index) => ({ ...item, originalIndex: index }))
                         .filter(item => item[quantityKey] === null)
                         .map(item => item.originalIndex);
 
                     if (remainingIndices.length > 0) {
-                        itemsToCountQueue = remainingIndices;
-                        positionInQueue = 0;
-                        currentIndex = itemsToCountQueue[0];
+                        runtime.itemsToCountQueue = remainingIndices;
+                        runtime.positionInQueue = 0;
+                        runtime.currentIndex = runtime.itemsToCountQueue[0];
                         renderCurrentItem(mode);
                     } else {
                         if (mode === 'order') {
@@ -628,7 +139,7 @@
                         }
                     }
                 } else {
-                    currentIndex = itemsToCountQueue[positionInQueue];
+                    runtime.currentIndex = runtime.itemsToCountQueue[runtime.positionInQueue];
                     renderCurrentItem(mode);
                 }
                 await setDoc(mode === 'order' ? refs.currentOrder() : refs.currentInventory(), process);
@@ -780,8 +291,8 @@
                 listElement.querySelectorAll('.select-inv-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.preventDefault();
-                        tempBaseInventoryId = e.target.dataset.id;
-                        if (tempBaseInventoryId) {
+                        runtime.tempBaseInventoryId = e.target.dataset.id;
+                        if (runtime.tempBaseInventoryId) {
                             el.orderForDate.value = new Date().toISOString().split('T')[0];
                             switchView(el.setupOrder);
                         }
@@ -968,7 +479,7 @@
             }
 
             function renderEditOrderView(orderId) {
-                editingId = orderId;
+                runtime.editingId = orderId;
                 const order = state.history.find(h => h.id == orderId);
                 if (!order) return;
 
@@ -996,7 +507,7 @@
             }
 
             function renderEditInventoryView(invId) {
-                editingId = invId;
+                runtime.editingId = invId;
                 const inv = state.history.find(h => h.id == invId);
                 if (!inv) return;
 
@@ -1089,12 +600,12 @@
 
                 el.manageItemsList.querySelectorAll('[draggable="true"]').forEach(item => {
                     item.addEventListener('dragstart', e => {
-                        draggedItemIndex = parseInt(e.currentTarget.dataset.index, 10);
+                        runtime.draggedItemIndex = parseInt(e.currentTarget.dataset.index, 10);
                         e.currentTarget.classList.add('dragging');
                     });
                     item.addEventListener('dragend', e => {
                         e.currentTarget.classList.remove('dragging');
-                        draggedItemIndex = null;
+                        runtime.draggedItemIndex = null;
                         el.manageItemsList.querySelectorAll('.drag-over').forEach(i => i.classList.remove('drag-over'));
                     });
                     item.addEventListener('dragover', e => {
@@ -1105,8 +616,8 @@
                     item.addEventListener('drop', e => {
                         e.preventDefault();
                         const droppedOnItemIndex = parseInt(e.currentTarget.dataset.index, 10);
-                        if (draggedItemIndex !== null && draggedItemIndex !== droppedOnItemIndex) {
-                            const [draggedItem] = state.masterItems.splice(draggedItemIndex, 1);
+                        if (runtime.draggedItemIndex !== null && runtime.draggedItemIndex !== droppedOnItemIndex) {
+                            const [draggedItem] = state.masterItems.splice(runtime.draggedItemIndex, 1);
                             state.masterItems.splice(droppedOnItemIndex, 0, draggedItem);
                             renderManageItemsList(el.manageItemsSearch.value);
                         }
@@ -1193,13 +704,13 @@
             }
 
             function renderRemitoConfirmView(detectedItems) {
-                const baseInv = state.history.find(h => h.id === tempBaseInventoryId);
+                const baseInv = state.history.find(h => h.id === runtime.tempBaseInventoryId);
                 if (!baseInv) {
                     alert("Error: No se pudo encontrar el inventario base.");
                     return;
                 }
 
-                tempRemitoItems = []; // Reiniciar la lista es crucial.
+                runtime.tempRemitoItems = []; // Reiniciar la lista es crucial.
                 const uniqueItemsFound = new Set();
 
                 if (!Array.isArray(detectedItems)) {
@@ -1220,7 +731,7 @@
                     });
 
                     if (bestMatch && !uniqueItemsFound.has(bestMatch)) {
-                        tempRemitoItems.push({ name: bestMatch, quantity: detected.quantity });
+                        runtime.tempRemitoItems.push({ name: bestMatch, quantity: detected.quantity });
                         uniqueItemsFound.add(bestMatch);
                     }
                 });
@@ -1232,7 +743,7 @@
             function displayRemitoConfirmList() {
                 el.remitoConfirmList.innerHTML = '';
 
-                tempRemitoItems.forEach(item => {
+                runtime.tempRemitoItems.forEach(item => {
                     const listItem = document.createElement('div');
                     listItem.className = 'flex items-center justify-between bg-gray-700 p-3 rounded-lg gap-2';
                     
@@ -1250,9 +761,9 @@
                     input.addEventListener('change', (e) => {
                         const itemName = e.target.dataset.itemName;
                         const newQuantity = parseFloat(e.target.value) || 0;
-                        const itemIndex = tempRemitoItems.findIndex(i => i.name === itemName);
+                        const itemIndex = runtime.tempRemitoItems.findIndex(i => i.name === itemName);
                         if (itemIndex !== -1) {
-                            tempRemitoItems[itemIndex].quantity = newQuantity;
+                            runtime.tempRemitoItems[itemIndex].quantity = newQuantity;
                         }
                         updateRemitoSummaryFooter();
                     });
@@ -1261,7 +772,7 @@
                 el.remitoConfirmList.querySelectorAll('.delete-remito-item-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const itemName = e.target.dataset.itemName;
-                        tempRemitoItems = tempRemitoItems.filter(i => i.name !== itemName);
+                        runtime.tempRemitoItems = runtime.tempRemitoItems.filter(i => i.name !== itemName);
                         displayRemitoConfirmList(); 
                     });
                 });
@@ -1271,15 +782,15 @@
             }
 
             function updateRemitoSummaryFooter() {
-                const itemCount = tempRemitoItems.length;
-                const bultoCount = tempRemitoItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+                const itemCount = runtime.tempRemitoItems.length;
+                const bultoCount = runtime.tempRemitoItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
 
                 el.remitoItemCount.textContent = itemCount;
                 el.remitoBultoCount.textContent = bultoCount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
             function updateAddItemDropdown() {
-                const currentItemNames = new Set(tempRemitoItems.map(i => i.name));
+                const currentItemNames = new Set(runtime.tempRemitoItems.map(i => i.name));
                 const availableItems = state.masterItems.filter(item => !currentItemNames.has(item));
                 
                 el.addRemitoItemSelect.innerHTML = '<option value="">Seleccionar ítem...</option>';
@@ -1292,8 +803,8 @@
             async function handleInventoryNext() {
                 const rawValue = el.itemQuantity.value.replace(',', '.');
                 const quantity = rawValue !== '' ? parseFloat(rawValue) : null;
-                if (state.currentInventory && state.currentInventory.items[currentIndex]) {
-                    state.currentInventory.items[currentIndex].quantity = (quantity !== null && !isNaN(quantity)) ? quantity : null;
+                if (state.currentInventory && state.currentInventory.items[runtime.currentIndex]) {
+                    state.currentInventory.items[runtime.currentIndex].quantity = (quantity !== null && !isNaN(quantity)) ? quantity : null;
                 }
                 advanceToNextItem('inventory');
             }
@@ -1301,19 +812,19 @@
             async function handleOrderNext() {
                 const rawValue = el.orderItemQuantity.value.replace(',', '.');
                 const quantity = rawValue !== '' ? parseFloat(rawValue) : null;
-                if (state.currentOrder && state.currentOrder.items[currentIndex]) {
-                    state.currentOrder.items[currentIndex].toOrder = (quantity !== null && !isNaN(quantity)) ? quantity : null;
+                if (state.currentOrder && state.currentOrder.items[runtime.currentIndex]) {
+                    state.currentOrder.items[runtime.currentIndex].toOrder = (quantity !== null && !isNaN(quantity)) ? quantity : null;
                 }
                 advanceToNextItem('order');
             }
 
             // --- Event Listeners ---
             el.continueInventoryBtn.addEventListener('click', () => {
-                appMode = 'inventory';
-                itemsToCountQueue = state.currentInventory.items.map((item, index) => ({...item, originalIndex: index})).filter(item => item.quantity === null).map(item => item.originalIndex);
-                if (itemsToCountQueue.length > 0) {
-                    positionInQueue = 0;
-                    currentIndex = itemsToCountQueue[0];
+                runtime.appMode = 'inventory';
+                runtime.itemsToCountQueue = state.currentInventory.items.map((item, index) => ({...item, originalIndex: index})).filter(item => item.quantity === null).map(item => item.originalIndex);
+                if (runtime.itemsToCountQueue.length > 0) {
+                    runtime.positionInQueue = 0;
+                    runtime.currentIndex = runtime.itemsToCountQueue[0];
                     switchView(el.item);
                     renderCurrentItem('inventory');
                 } else {
@@ -1323,11 +834,11 @@
             });
 
             el.continueOrderBtn.addEventListener('click', () => {
-                appMode = 'order';
-                itemsToCountQueue = state.currentOrder.items.map((item, index) => ({...item, originalIndex: index})).filter(item => item.toOrder === null).map(item => item.originalIndex);
-                if (itemsToCountQueue.length > 0) {
-                    positionInQueue = 0;
-                    currentIndex = itemsToCountQueue[0];
+                runtime.appMode = 'order';
+                runtime.itemsToCountQueue = state.currentOrder.items.map((item, index) => ({...item, originalIndex: index})).filter(item => item.toOrder === null).map(item => item.originalIndex);
+                if (runtime.itemsToCountQueue.length > 0) {
+                    runtime.positionInQueue = 0;
+                    runtime.currentIndex = runtime.itemsToCountQueue[0];
                     switchView(el.orderItem);
                     renderCurrentItem('order');
                 } else {
@@ -1337,13 +848,13 @@
             });
 
             el.startNewInventoryBtn.addEventListener('click', () => {
-                appMode = 'inventory';
+                runtime.appMode = 'inventory';
                 el.inventoryDate.value = new Date().toISOString().split('T')[0];
                 switchView(el.setup);
             });
 
             el.makeOrderBtn.addEventListener('click', () => {
-                appMode = 'order';
+                runtime.appMode = 'order';
                 renderHistoryList(true);
                 switchView(el.selectInventory);
             });
@@ -1361,9 +872,9 @@
                     items: state.masterItems.map(name => ({ name, quantity: null }))
                 };
                 state.currentInventory = newInventory;
-                itemsToCountQueue = state.currentInventory.items.map((_, index) => index);
-                positionInQueue = 0;
-                currentIndex = itemsToCountQueue[0];
+                runtime.itemsToCountQueue = state.currentInventory.items.map((_, index) => index);
+                runtime.positionInQueue = 0;
+                runtime.currentIndex = runtime.itemsToCountQueue[0];
                 await setDoc(refs.currentInventory(), state.currentInventory);
                 switchView(el.item);
                 renderCurrentItem('inventory');
@@ -1374,7 +885,7 @@
             });
 
             el.orderMethodManualBtn.addEventListener('click', async () => {
-                const baseInv = state.history.find(h => h.id === tempBaseInventoryId);
+                const baseInv = state.history.find(h => h.id === runtime.tempBaseInventoryId);
                 if (!baseInv) {
                     alert('Error: No se encontró el inventario base.');
                     return;
@@ -1387,10 +898,10 @@
                     baseInventoryId: baseInv.id,
                     items: baseInv.items.map(item => ({ name: item.name, stock: item.quantity, toOrder: null, received: null }))
                 };
-                appMode = 'order';
-                itemsToCountQueue = state.currentOrder.items.map((_, i) => i);
-                positionInQueue = 0;
-                currentIndex = itemsToCountQueue[0];
+                runtime.appMode = 'order';
+                runtime.itemsToCountQueue = state.currentOrder.items.map((_, i) => i);
+                runtime.positionInQueue = 0;
+                runtime.currentIndex = runtime.itemsToCountQueue[0];
                 await setDoc(refs.currentOrder(), state.currentOrder);
                 switchView(el.orderItem);
                 renderCurrentItem('order');
@@ -1402,13 +913,13 @@
 
             // Inventory controls
             el.nextBtn.addEventListener('click', handleInventoryNext);
-            el.naBtn.addEventListener('click', () => { if(state.currentInventory) { state.currentInventory.items[currentIndex].quantity = 'N/A'; advanceToNextItem('inventory'); } });
+            el.naBtn.addEventListener('click', () => { if(state.currentInventory) { state.currentInventory.items[runtime.currentIndex].quantity = 'N/A'; advanceToNextItem('inventory'); } });
             el.skipBtn.addEventListener('click', () => { if(state.currentInventory) { advanceToNextItem('inventory'); } });
             el.itemQuantity.addEventListener('keydown', (e) => e.key === 'Enter' && handleInventoryNext());
 
             // Order controls
             el.orderNextBtn.addEventListener('click', handleOrderNext);
-            el.orderNoPedirBtn.addEventListener('click', () => { if(state.currentOrder) { state.currentOrder.items[currentIndex].toOrder = 'NO PEDIR'; advanceToNextItem('order'); } });
+            el.orderNoPedirBtn.addEventListener('click', () => { if(state.currentOrder) { state.currentOrder.items[runtime.currentIndex].toOrder = 'NO PEDIR'; advanceToNextItem('order'); } });
             el.orderSkipBtn.addEventListener('click', () => { if(state.currentOrder) { advanceToNextItem('order'); } });
             el.orderItemQuantity.addEventListener('keydown', (e) => e.key === 'Enter' && handleOrderNext());
 
@@ -1474,8 +985,8 @@
             });
 
             el.saveEditedOrderBtn.addEventListener('click', async () => {
-                const orderRef = refs.historyDoc(editingId);
-                const orderData = { ...state.history.find(h => h.id == editingId) };
+                const orderRef = refs.historyDoc(runtime.editingId);
+                const orderData = { ...state.history.find(h => h.id == runtime.editingId) };
                 
                 el.editOrderList.querySelectorAll('input[data-index]').forEach(input => {
                     const itemIndex = parseInt(input.dataset.index, 10);
@@ -1490,8 +1001,8 @@
             });
 
             el.saveEditedInventoryBtn.addEventListener('click', async () => {
-                const invRef = refs.historyDoc(editingId);
-                const invData = { ...state.history.find(h => h.id == editingId) };
+                const invRef = refs.historyDoc(runtime.editingId);
+                const invData = { ...state.history.find(h => h.id == runtime.editingId) };
 
                 el.editInventoryList.querySelectorAll('input[data-index]').forEach(input => {
                     const itemIndex = parseInt(input.dataset.index, 10);
@@ -1528,10 +1039,10 @@
             });
             
             el.saveAndExitBtn.addEventListener('click', async () => {
-                if (appMode === 'inventory' && state.currentInventory) {
+                if (runtime.appMode === 'inventory' && state.currentInventory) {
                     await setDoc(refs.currentInventory(), state.currentInventory);
                     showToast('Progreso de inventario guardado.');
-                } else if (appMode === 'order' && state.currentOrder) {
+                } else if (runtime.appMode === 'order' && state.currentOrder) {
                     await setDoc(refs.currentOrder(), state.currentOrder);
                     showToast('Progreso de pedido guardado.');
                 }
@@ -1539,16 +1050,16 @@
             });
 
             el.discardProgressBtn.addEventListener('click', () => {
-                const type = appMode === 'inventory' ? 'inventario' : 'pedido';
+                const type = runtime.appMode === 'inventory' ? 'inventario' : 'pedido';
                 el.confirmDeleteTitle.textContent = `¿Descartar ${type} en progreso?`;
                 el.confirmDeleteMessage.textContent = 'Toda la información de este conteo se perderá permanentemente.';
                 el.confirmDeleteModal.classList.remove('hidden');
 
                 el.confirmDeleteBtn.onclick = async () => {
-                    if (appMode === 'inventory' && state.currentInventory) {
+                    if (runtime.appMode === 'inventory' && state.currentInventory) {
                         await deleteDoc(refs.currentInventory());
                         state.currentInventory = null;
-                    } else if (appMode === 'order' && state.currentOrder) {
+                    } else if (runtime.appMode === 'order' && state.currentOrder) {
                         await deleteDoc(refs.currentOrder());
                         state.currentOrder = null;
                     }
@@ -1563,11 +1074,11 @@
             });
 
             el.authToggleBtn.addEventListener('click', () => {
-                isLoginMode = !isLoginMode;
-                el.authTitle.textContent = isLoginMode ? 'Iniciar Sesión' : 'Registrarse';
-                el.authActionBtn.textContent = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
-                el.authToggleText.textContent = isLoginMode ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?';
-                el.authToggleBtn.textContent = isLoginMode ? 'Regístrate' : 'Inicia Sesión';
+                runtime.isLoginMode = !runtime.isLoginMode;
+                el.authTitle.textContent = runtime.isLoginMode ? 'Iniciar Sesión' : 'Registrarse';
+                el.authActionBtn.textContent = runtime.isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+                el.authToggleText.textContent = runtime.isLoginMode ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?';
+                el.authToggleBtn.textContent = runtime.isLoginMode ? 'Regístrate' : 'Inicia Sesión';
                 el.loginError.textContent = '';
             });
 
@@ -1581,7 +1092,7 @@
                     return;
                 }
 
-                if (isLoginMode) {
+                if (runtime.isLoginMode) {
                     signInWithEmailAndPassword(auth, email, password)
                         .catch(error => {
                             console.error("Sign-in failed:", error);
@@ -1593,7 +1104,7 @@
                             console.error("Sign-up failed:", error);
                             if (error.code === 'auth/email-already-in-use') {
                                 el.loginError.textContent = 'Este correo ya está registrado. Intenta iniciar sesión.';
-                                isLoginMode = true;
+                                runtime.isLoginMode = true;
                                 el.authTitle.textContent = 'Iniciar Sesión';
                                 el.authActionBtn.textContent = 'Iniciar Sesión';
                                 el.authToggleText.textContent = '¿No tienes cuenta?';
@@ -1612,13 +1123,13 @@
             });
             
             el.confirmRemitoDataBtn.addEventListener('click', async () => {
-                const baseInv = state.history.find(h => h.id === tempBaseInventoryId);
+                const baseInv = state.history.find(h => h.id === runtime.tempBaseInventoryId);
                 if (!baseInv) {
                     alert('Error: No se encontró el inventario base.');
                     return;
                 }
                 
-                if(tempRemitoItems.length === 0){
+                if(runtime.tempRemitoItems.length === 0){
                     alert('No hay ítems en la lista para crear un pedido.');
                     return;
                 }
@@ -1629,7 +1140,7 @@
                     date: new Date().toISOString(),
                     orderForDate: el.orderForDate.value,
                     baseInventoryId: baseInv.id,
-                    items: tempRemitoItems.map(remitoItem => {
+                    items: runtime.tempRemitoItems.map(remitoItem => {
                         const baseItem = baseInv.items.find(bi => bi.name === remitoItem.name);
                         return {
                             name: remitoItem.name,
@@ -1657,8 +1168,8 @@
                 const quantity = parseFloat(rawValue);
 
                 if (itemName && !isNaN(quantity) && quantity > 0) {
-                    tempRemitoItems.push({ name: itemName, quantity: quantity });
-                    tempRemitoItems.sort((a,b) => a.name.localeCompare(b.name));
+                    runtime.tempRemitoItems.push({ name: itemName, quantity: quantity });
+                    runtime.tempRemitoItems.sort((a,b) => a.name.localeCompare(b.name));
                     displayRemitoConfirmList();
                     el.addRemitoItemSelect.value = '';
                     el.addRemitoItemQuantity.value = '';
@@ -1823,7 +1334,4 @@ Finalmente, devuelve **UN ÚNICO ARRAY JSON** que contenga todos los artículos 
                 return costs[s2.length];
             }
         });
-    </script>
-
-</body>
-</html>
+    
