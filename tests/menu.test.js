@@ -46,6 +46,11 @@ test('history button shows history view and back returns to menu', async () => {
   jest.unstable_mockModule('../js/elements.js', () => ({
     getDOM: () => ({ el, allViews })
   }));
+  const renderHistory = jest.fn();
+  jest.unstable_mockModule('../js/history.js', () => ({
+    renderHistory,
+    initHistory: jest.fn()
+  }));
 
   global.document = {
     addEventListener: () => {},
@@ -57,6 +62,7 @@ test('history button shows history view and back returns to menu', async () => {
 
   // Simulate clicking history button
   historyClick();
+  expect(renderHistory).toHaveBeenCalled();
   expect(mainMenu.classList.contains('hidden')).toBe(true);
   expect(history.classList.contains('hidden')).toBe(false);
 
