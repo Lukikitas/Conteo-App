@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import {
   getAuth,
   signInWithPopup,
@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword
-} from "firebase/auth";
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import {
   getFirestore,
   doc,
@@ -20,7 +20,7 @@ import {
   query,
   orderBy,
   deleteDoc
-} from "firebase/firestore";
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB7MrPbY7cwywvOnyz_-5RXFO1S40Z6Ous",
