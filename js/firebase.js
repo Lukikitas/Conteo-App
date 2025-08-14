@@ -44,6 +44,7 @@ export const getRefs = (userId) => ({
 });
 
 export {
+  getRefs,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
