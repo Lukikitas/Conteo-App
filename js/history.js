@@ -1,9 +1,9 @@
+import { state } from './state.js';
+import { getDOM } from './elements.js';
+
 let renderFn;
 
-export async function initHistory() {
-  const { state } = await import('./state.js');
-  const { getDOM } = await import('./elements.js');
-
+export function initHistory() {
   try {
     const stored = localStorage.getItem('history');
     state.history = stored ? JSON.parse(stored) : [];
@@ -42,8 +42,7 @@ export function historyCount(entries = []) {
   return entries.length;
 }
 
-export async function addHistoryEntry(entry) {
-  const { state } = await import('./state.js');
+export function addHistoryEntry(entry) {
   state.history.push(entry);
   localStorage.setItem('history', JSON.stringify(state.history));
   renderHistory();
