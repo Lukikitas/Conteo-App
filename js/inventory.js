@@ -35,7 +35,7 @@ function nextItem() {
 }
 
 export function initInventory() {
-  const { el } = getDOM();
+  const { el, navButtons } = getDOM();
 
   el.startCountingBtn?.addEventListener('click', () => {
     state.currentInventory = { startedAt: Date.now(), items: [] };
@@ -44,6 +44,7 @@ export function initInventory() {
     displayCurrentItem();
     el.setup?.classList.add('hidden');
     el.item?.classList.remove('hidden');
+    navButtons.style.display = 'flex';
     el.continueInventoryBtn?.classList.remove('hidden');
     updateMenuButtons();
   });

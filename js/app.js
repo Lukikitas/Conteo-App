@@ -19,7 +19,7 @@ export function updateMenuButtons() {
 }
 
 export function setupMenu() {
-  const { allViews, el } = getDOM();
+  const { allViews, el, navButtons } = getDOM();
   const show = (view) => {
     allViews.forEach(v => v.classList.add('hidden'));
     view.classList.remove('hidden');
@@ -38,10 +38,28 @@ export function setupMenu() {
   });
   el.manageItemsBtn?.addEventListener('click', () => show(el.manageItems));
 
-  el.backToMenuFromHistoryBtn?.addEventListener('click', () => { show(el.mainMenu); updateMenuButtons(); });
-  el.backToMenuFromManageBtn?.addEventListener('click', () => { show(el.mainMenu); updateMenuButtons(); });
-  el.backToMenuFromSelectInvBtn?.addEventListener('click', () => { show(el.mainMenu); updateMenuButtons(); });
-  el.backToMenuFromConsumptionBtn?.addEventListener('click', () => { show(el.mainMenu); updateMenuButtons(); });
+  const backToMenu = () => {
+    show(el.mainMenu);
+    updateMenuButtons();
+    navButtons.style.display = 'none';
+  };
+
+  el.backToMenuFromHistoryBtn?.addEventListener('click', backToMenu);
+  el.backToMenuFromManageBtn?.addEventListener('click', backToMenu);
+  el.backToMenuFromSelectInvBtn?.addEventListener('click', backToMenu);
+  el.backToMenuFromConsumptionBtn?.addEventListener('click', backToMenu);
+
+  // Other back buttons
+  el.backToCountBtn?.addEventListener('click', () => show(el.item));
+  el.backToHistoryBtn?.addEventListener('click', () => show(el.history));
+  el.backToSelectInvBtn?.addEventListener('click', () => show(el.selectInventory));
+  el.backToSetupOrderBtn?.addEventListener('click', () => show(el.setupOrder));
+  el.backToOrderMethodBtn?.addEventListener('click', () => show(el.orderMethodView));
+  el.backToRemitoUploadBtn?.addEventListener('click', () => show(el.remitoUploadView));
+  el.backToConsumptionSetupBtn?.addEventListener('click', () => show(el.consumptionSetup));
+  el.backToHistoryFromEditBtn?.addEventListener('click', () => show(el.history));
+  el.backToHistoryFromEditInvBtn?.addEventListener('click', () => show(el.history));
+  el.backToOrderBtn?.addEventListener('click', () => show(el.orderItem));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

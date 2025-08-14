@@ -35,7 +35,7 @@ function nextOrderItem() {
 }
 
 export function initOrders() {
-  const { el } = getDOM();
+  const { el, navButtons } = getDOM();
 
   el.startOrderingBtn?.addEventListener('click', () => {
     state.currentOrder = { startedAt: Date.now(), items: [] };
@@ -44,6 +44,7 @@ export function initOrders() {
     displayCurrentOrderItem();
     el.setupOrder?.classList.add('hidden');
     el.orderItem?.classList.remove('hidden');
+    navButtons.style.display = 'flex';
     el.continueOrderBtn?.classList.remove('hidden');
     updateMenuButtons();
   });
