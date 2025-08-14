@@ -17,6 +17,32 @@ const createEl = (visible = false) => ({
   addEventListener: () => {}
 });
 
+jest.unstable_mockModule('firebase/app', () => ({
+    initializeApp: jest.fn(),
+}));
+jest.unstable_mockModule('firebase/auth', () => ({
+    getAuth: jest.fn(),
+    signInWithPopup: jest.fn(),
+    GoogleAuthProvider: jest.fn(),
+    signOut: jest.fn(),
+    onAuthStateChanged: jest.fn(),
+    createUserWithEmailAndPassword: jest.fn(),
+    signInWithEmailAndPassword: jest.fn(),
+}));
+jest.unstable_mockModule('firebase/firestore', () => ({
+    getFirestore: jest.fn(),
+    doc: jest.fn(),
+    getDoc: jest.fn(),
+    setDoc: jest.fn(),
+    updateDoc: jest.fn(),
+    collection: jest.fn(),
+    onSnapshot: jest.fn(),
+    writeBatch: jest.fn(),
+    query: jest.fn(),
+    orderBy: jest.fn(),
+    deleteDoc: jest.fn(),
+}));
+
 test('history button shows history view and back returns to menu', async () => {
   jest.resetModules();
   const mainMenu = createEl(true);
