@@ -1,3 +1,5 @@
+import { jest } from '@jest/globals';
+
 import { isAuthenticated } from '../js/auth.js';
 
 test('isAuthenticated returns true for user object', () => {

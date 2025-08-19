@@ -1,14 +1,9 @@
-export async function initAuth() {
-  const { getDOM } = await import('./elements.js');
-  const {
-    auth,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged,
-  } = await import('./firebase.js');
-  const { runtime } = await import('./state.js');
+import { getDOM } from './elements.js';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase.js';
+import { runtime } from './state.js';
+import { initializeMasterItems, initManageItems } from './items.js';
 
+export function initAuth() {
   const { el } = getDOM();
 
   const updateMode = () => {
@@ -26,14 +21,18 @@ export async function initAuth() {
     el.loginError.textContent = '';
   };
 
-  el.authToggleBtn.addEventListener('click', () => {
+  el.authToggleBtn?.addEventListener('click', () => {
     runtime.isLoginMode = !runtime.isLoginMode;
     updateMode();
   });
 
-  el.authActionBtn.addEventListener('click', async () => {
-    const email = el.emailInput.value.trim();
-    const password = el.passwordInput.value;
+  el.authActionBtn?.addEventListener('click', async () => {
+    const email = el.emailInput?.value.trim();
+    const password = el.passwordInput?.value;
+    if (!email || !password) {
+      el.loginError.textContent = 'Completa todos los campos';
+      return;
+    }
     try {
       if (runtime.isLoginMode) {
         await signInWithEmailAndPassword(auth, email, password);
@@ -45,19 +44,22 @@ export async function initAuth() {
     }
   });
 
-  el.logoutBtn.addEventListener('click', () => signOut(auth));
+  el.logoutBtn?.addEventListener('click', () => signOut(auth));
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     if (user) {
       runtime.userId = user.uid;
-      el.userEmail.textContent = user.email;
-      el.loginView.classList.add('hidden');
-      el.mainContent.classList.remove('hidden');
+      await initializeMasterItems(user.uid);
+      initManageItems();
+
+      if (el.userEmail) el.userEmail.textContent = user.email;
+      el.loginView?.classList.add('hidden');
+      el.mainContent?.classList.remove('hidden');
     } else {
       runtime.userId = null;
-      el.userEmail.textContent = '';
-      el.mainContent.classList.add('hidden');
-      el.loginView.classList.remove('hidden');
+      if (el.userEmail) el.userEmail.textContent = '';
+      el.mainContent?.classList.add('hidden');
+      el.loginView?.classList.remove('hidden');
     }
   });
 
