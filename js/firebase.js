@@ -9,7 +9,7 @@ import {
   signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import {
-  getFirestore,
+  initializeFirestore,
   doc,
   getDoc,
   setDoc,
@@ -33,7 +33,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true
+});
 
 const getRefs = (userId) => ({
   masterItems: () => doc(db, 'users', userId, 'data', 'masterItems'),
