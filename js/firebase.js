@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import {
   getAuth,
   signInWithPopup,
@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword
-} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+} from "firebase/auth";
 import {
   getFirestore,
   doc,
@@ -20,7 +20,7 @@ import {
   query,
   orderBy,
   deleteDoc
-} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB7MrPbY7cwywvOnyz_-5RXFO1S40Z6Ous",
@@ -35,7 +35,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-export const getRefs = (userId) => ({
+const getRefs = (userId) => ({
   masterItems: () => doc(db, 'users', userId, 'data', 'masterItems'),
   currentInventory: () => doc(db, 'users', userId, 'data', 'currentInventory'),
   currentOrder: () => doc(db, 'users', userId, 'data', 'currentOrder'),
@@ -44,6 +44,7 @@ export const getRefs = (userId) => ({
 });
 
 export {
+  getRefs,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
